@@ -61,13 +61,45 @@
 // 从这开始定义你需要用到的 token
 // 对于一些需要 "值" 的 token，可以在前面加上 <type> 来指定值的类型
 // 例如，%token <int> INT_CONST 定义了一个名为 INT_CONST
-%token <int> INT_CONST
-%token <std::string> STR_CONST ERR_TOKEN SLASH_COMMENT
 
+// 基础数据类型token
+%token <int> INT_CONST
+%token <long long> LL_CONST
+%token <float> FLOAT_CONST
+%token <std::string> STR_CONST ERR_TOKEN SLASH_COMMENT
 %token <std::string> IDENT 
 
+// 关键字token
 %token IF ELSE FOR WHILE CONTINUE BREAK SWITCH CASE GOTO DO RETURN CONST
+
+//数据类型
+%token INT FLOAT
+
+// 分隔符和标点符号
 %token SEMICOLON COMMA LPAREN RPAREN LBRACKET RBRACKET LBRACE RBRACE
+
+// 算术运算符
+%token ADD SUB MUL DIV MOD
+
+// 关系运算符
+%token EQ NE LT LE GT GE
+
+// 逻辑运算符
+%token AND OR NOT
+
+// 赋值运算符
+%token ASSIGN
+
+// 位运算符
+%token BITAND BITOR BITXOR BITNOT SHL SHR
+
+// 复合赋值运算符
+%token ADD_ASSIGN SUB_ASSIGN MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN
+%token AND_ASSIGN OR_ASSIGN XOR_ASSIGN SHL_ASSIGN SHR_ASSIGN
+
+// 其他符号
+%token DOT QUESTION COLON ARROW INCREMENT DECREMENT
+
 %token END
 
 %nterm <FE::AST::Operator> UNARY_OP

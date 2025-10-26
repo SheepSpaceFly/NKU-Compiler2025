@@ -39,6 +39,14 @@
 %option yyclass="Scanner"
 %option prefix="Yacc_"
 
+/* 定义数字和指数相关的字符类 */
+digit       [0-9]
+hexdigit    [0-9a-fA-F]
+exponent    [eE][-+]?{digit}+
+
+/* 定义注释处理的状态 */
+%x COMMENT
+
 %%
 
 %{
@@ -79,19 +87,86 @@ TODO(Lab1)：参考SysY2022的定义，实现更多的词法，如浮点数、�
 ";"                 { RETT(SEMICOLON, loc) }
 ","                 { RETT(COMMA, loc) }
 
+"int"   { RETT(INT, loc) }
+"float"   { RETT(FLOAT, loc) }
+
 "//".*              { 
     auto str = std::string(yytext);
     // return YaccParser::make_SLASH_COMMENT(str, loc);  //思考为什么要把这一行注释掉
+                                                         //答：因为不需要把注释的内容传递给语法分析器​​
 }
 
-"/*""*/" {
-    //TODO(Lab1)：实现多行注释的处理，包括修改上方的匹配规则
+"/*" {
+    BEGIN(COMMENT);  // 进入注释状态
 }
 
-[A-Za-z_]+[A-Za-z0-9_]* {
-    auto str = std::string(yytext);
-    return YaccParser::make_IDENT(str, loc); 
+<COMMENT>"*/" {
+    BEGIN(INITIAL);  // 退出注释状态，返回初始状态
 }
+
+<COMMENT>[^*\n]+ {
+    // 注释中的普通字符，忽略
+}
+
+<COMMENT>"*" {
+    // 注释中的单个星号，忽略
+}
+
+<COMMENT>\n {
+    // 注释中的换行符，需要更新行号
+    loc.lines(1);
+    loc.step();
+}
+
+<COMMENT><<EOF>> {
+    _parser.reportError(loc, "Unterminated comment");
+    BEGIN(INITIAL);
+    return YaccParser::make_ERR_TOKEN("Unterminated comment", loc);
+}
+
+"+"                 { RETT(ADD, loc) }
+"-"                 { RETT(SUB, loc) }
+"*"                 { RETT(MUL, loc) }
+"/"                 { RETT(DIV, loc) }
+"%"                 { RETT(MOD, loc) }
+
+"=="                { RETT(EQ, loc) }
+"!="                { RETT(NE, loc) }
+"<"                 { RETT(LT, loc) }
+"<="                { RETT(LE, loc) }
+">"                 { RETT(GT, loc) }
+">="                { RETT(GE, loc) }
+
+"&&"                { RETT(AND, loc) }
+"||"                { RETT(OR, loc) }
+"!"                 { RETT(NOT, loc) }
+
+"="                 { RETT(ASSIGN, loc) }
+
+"&"                 { RETT(BITAND, loc) }
+"|"                 { RETT(BITOR, loc) }
+"^"                 { RETT(BITXOR, loc) }
+"~"                 { RETT(BITNOT, loc) }
+"<<"                { RETT(SHL, loc) }
+">>"                { RETT(SHR, loc) }
+
+"+="                { RETT(ADD_ASSIGN, loc) }
+"-="                { RETT(SUB_ASSIGN, loc) }
+"*="                { RETT(MUL_ASSIGN, loc) }
+"/="                { RETT(DIV_ASSIGN, loc) }
+"%="                { RETT(MOD_ASSIGN, loc) }
+"&="                { RETT(AND_ASSIGN, loc) }
+"|="                { RETT(OR_ASSIGN, loc) }
+"^="                { RETT(XOR_ASSIGN, loc) }
+"<<="               { RETT(SHL_ASSIGN, loc) }
+">>="               { RETT(SHR_ASSIGN, loc) }
+
+"."                 { RETT(DOT, loc) }
+"?"                 { RETT(QUESTION, loc) }
+":"                 { RETT(COLON, loc) }
+"->"                { RETT(ARROW, loc) }
+"++"                { RETT(INCREMENT, loc) }
+"--"                { RETT(DECREMENT, loc) }
 
 \"[^\"]*\"          { 
     std::string str(yytext);
@@ -99,11 +174,68 @@ TODO(Lab1)：参考SysY2022的定义，实现更多的词法，如浮点数、�
     return YaccParser::make_STR_CONST(str, loc); 
 }
 
-[1-9][0-9]* {
+[A-Za-z_]+[A-Za-z0-9_]* {
+    auto str = std::string(yytext);
+    return YaccParser::make_IDENT(str, loc); 
+}
+
+{digit}+\.{digit}*({exponent})?|\.{digit}+({exponent})?|{digit}+{exponent} {
+    // 浮点数常量规则 
+    try {
+        float result = convertToFloatDec(yytext);
+        return YaccParser::make_FLOAT_CONST(result, loc);
+    } catch (const std::exception& e) {
+        _parser.reportError(loc, std::string("Error parsing float: ") + e.what());
+        auto str = std::string(yytext);
+        return YaccParser::make_ERR_TOKEN(str, loc);
+    }
+}
+
+0[xX][0-9a-fA-F]+ {
+    // 十六进制整数 
     try {
         bool isLL = false;
         long long result = convertToInt(yytext, '\0', isLL);
-        // if (isLL) return YaccParser::make_LL_CONST(result, loc);
+        if (isLL) return YaccParser::make_LL_CONST(result, loc);
+        return YaccParser::make_INT_CONST(static_cast<int>(result), loc);
+    } catch (const std::exception& e) {
+        _parser.reportError(loc, std::string("Error parsing hexadecimal int: ") + e.what());
+        auto str = std::string(yytext);
+        return YaccParser::make_ERR_TOKEN(str, loc);
+    }
+}
+
+0[0-7]+ {
+    // 八进制整数 
+    try {
+        bool isLL = false;
+        long long result = convertToInt(yytext, '\0', isLL);
+        if (isLL) return YaccParser::make_LL_CONST(result, loc);
+        return YaccParser::make_INT_CONST(static_cast<int>(result), loc);
+    } catch (const std::exception& e) {
+        _parser.reportError(loc, std::string("Error parsing octal int: ") + e.what());
+        auto str = std::string(yytext);
+        return YaccParser::make_ERR_TOKEN(str, loc);
+    }
+}
+
+"0" {
+    // 数字0
+    try {
+        return YaccParser::make_INT_CONST(0, loc);
+    } catch (const std::exception& e) {
+        _parser.reportError(loc, std::string("Error parsing integer: ") + e.what());
+        auto str = std::string(yytext);
+        return YaccParser::make_ERR_TOKEN(str, loc);
+    }
+}
+
+[1-9][0-9]* {
+    // 十进制整数 
+    try {
+        bool isLL = false;
+        long long result = convertToInt(yytext, '\0', isLL);
+        if (isLL) return YaccParser::make_LL_CONST(result, loc);
         return YaccParser::make_INT_CONST(static_cast<int>(result), loc);
     } catch (const std::exception& e) {
         _parser.reportError(loc, std::string("Error parsing hexadecimal int: ") + e.what());
@@ -118,6 +250,12 @@ TODO(Lab1)：参考SysY2022的定义，实现更多的词法，如浮点数、�
 "]"                 { RETT(RBRACKET, loc) }
 "{"                 { RETT(LBRACE, loc) }
 "}"                 { RETT(RBRACE, loc) }
+
+. {
+    // 错误处理 - 无法识别的字符 
+    _parser.reportError(loc, std::string("Unrecognized character: ") + yytext);
+    return YaccParser::make_ERR_TOKEN(std::string(yytext), loc);
+}
 
 <<EOF>>         { RETT(END, loc); }
 
